@@ -78,7 +78,6 @@ export default function ProductOverview() {
 
   return (
     <div className="container mx-auto p-4">
-      <h1 className="text-3xl font-bold mb-6">Product Management</h1>
       <div className="flex flex-col md:flex-row justify-between items-center mb-4 space-y-2 md:space-y-0 md:space-x-2">
         <Input 
           placeholder="Search products..." 
