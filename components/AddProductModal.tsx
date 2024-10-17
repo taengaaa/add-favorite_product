@@ -9,14 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { Upload } from 'lucide-react';
 import { Product } from './ProductOverview';
-
-const categories = [
-  { name: 'Electronics', icon: '💻' },
-  { name: 'Clothing', icon: '👕' },
-  { name: 'Books', icon: '📚' },
-  { name: 'Home', icon: '🏠' },
-  { name: 'Sports', icon: '⚽' },
-];
+import { categories } from '@/src/utils/categories';
 
 type AddProductModalProps = {
   isOpen: boolean;
@@ -75,7 +68,7 @@ export default function AddProductModal({ isOpen, onClose, onAddProduct }: AddPr
                 <SelectValue placeholder="Select a category" />
               </SelectTrigger>
               <SelectContent>
-                {categories.map((cat) => (
+                {categories.filter(cat => cat.name !== 'All').map((cat) => (
                   <SelectItem key={cat.name} value={cat.name}>
                     {cat.icon} {cat.name}
                   </SelectItem>

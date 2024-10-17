@@ -1,0 +1,15 @@
+export const categories = [
+  { name: 'All', icon: '🌐' },
+  { name: 'Electronics', icon: '💻' },
+  { name: 'Clothing', icon: '👕' },
+  { name: 'Books', icon: '📚' },
+  { name: 'Home', icon: '🏠' },
+  { name: 'Sports', icon: '⚽' },
+  { name: 'Office', icon: '📎' },
+  { name: 'Home Office', icon: '🖥️' },
+  { name: 'Kitchen', icon: '🍳' },
+  { name: 'Beauty', icon: '💄' },
+  { name: 'Toys', icon: '🧸' },
+  { name: 'Automotive', icon: '🚗' },
+  { name: 'Garden', icon: '🌱' },
+];

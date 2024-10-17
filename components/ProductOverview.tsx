@@ -8,6 +8,7 @@ import { Grid2X2, List } from 'lucide-react';
 import AddProductModal from './AddProductModal';
 import ProductList from './ProductList';
 import ProductGrid from './ProductGrid';
+import { categories } from '@/src/utils/categories';
 
 export type Product = {
   id: string;
@@ -19,15 +20,6 @@ export type Product = {
   upvotes: number;
   upvoted: boolean;
 };
-
-const categories = [
-  { name: 'All', icon: '🌐' },
-  { name: 'Electronics', icon: '💻' },
-  { name: 'Clothing', icon: '👕' },
-  { name: 'Books', icon: '📚' },
-  { name: 'Home', icon: '🏠' },
-  { name: 'Sports', icon: '⚽' },
-];
 
 export default function ProductOverview() {
   const [isGridView, setIsGridView] = useState(true);
