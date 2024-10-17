@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Product } from './ProductOverview';
 import { ThumbsUp } from 'lucide-react';
 import Link from 'next/link';
+import { categories } from '@/src/utils/categories';
 
 type ProductGridProps = {
   products: Product[];
@@ -10,6 +11,11 @@ type ProductGridProps = {
 };
 
 export default function ProductGrid({ products, onUpvote }: ProductGridProps) {
+  const getCategoryEmoji = (categoryName: string) => {
+    const category = categories.find(cat => cat.name === categoryName);
+    return category ? category.icon : '🌐'; // Default to globe emoji if category not found
+  };
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       {products.map((product) => (
@@ -20,7 +26,9 @@ export default function ProductGrid({ products, onUpvote }: ProductGridProps) {
             </CardHeader>
             <CardContent>
               <img src={product.image} alt={product.name} className="w-full h-48 object-cover mb-2" />
-              <p className="text-sm text-gray-500 mb-2">{product.category}</p>
+              <p className="text-sm text-gray-500 mb-2">
+                {getCategoryEmoji(product.category)} {product.category}
+              </p>
               <p className="text-sm">{product.description}</p>
             </CardContent>
           </Link>

@@ -1,10 +1,13 @@
 "use client"
 
 import { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
+import { ArrowLeft, ExternalLink, ThumbsUp } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import Link from "next/link"
+import Image from "next/image"
 import { Product } from './ProductOverview';
-import { ThumbsUp } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { categories } from '@/src/utils/categories';
 
 type ProductDetailProps = {
   product: Product;
@@ -15,13 +18,17 @@ export default function ProductDetail({ product: initialProduct }: ProductDetail
   const router = useRouter();
 
   useEffect(() => {
-    // Fetch the actual product data from localStorage
     const storedProducts = JSON.parse(localStorage.getItem('products') || '[]');
     const actualProduct = storedProducts.find((p: Product) => p.id === initialProduct.id);
     if (actualProduct) {
       setProduct(actualProduct);
     }
   }, [initialProduct.id]);
+
+  const getCategoryEmoji = (categoryName: string) => {
+    const category = categories.find(cat => cat.name === categoryName);
+    return category ? category.icon : '🌐'; // Default to globe emoji if category not found
+  };
 
   const handleUpvote = () => {
     const updatedProduct = {
@@ -31,7 +38,6 @@ export default function ProductDetail({ product: initialProduct }: ProductDetail
     };
     setProduct(updatedProduct);
 
-    // Update the product in localStorage
     const storedProducts = JSON.parse(localStorage.getItem('products') || '[]');
     const updatedProducts = storedProducts.map((p: Product) => 
       p.id === updatedProduct.id ? updatedProduct : p
@@ -40,28 +46,47 @@ export default function ProductDetail({ product: initialProduct }: ProductDetail
   };
 
   return (
-    <div>
-      <Button onClick={() => router.push('/')} className="mb-4">Back to Products</Button>
-      <h1 className="text-3xl font-bold mb-4">{product.name}</h1>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div>
-          <img src={product.image} alt={product.name} className="w-full h-auto object-cover rounded-lg" />
-        </div>
-        <div>
-          <p className="text-lg mb-2">{product.category}</p>
-          <p className="text-gray-700 mb-4">{product.description}</p>
-          <div className="flex justify-between items-center mb-4">
-            <a href={product.link} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
-              View Product
-            </a>
+    <div className="container mx-auto px-4 py-8">
+      <Button variant="ghost" className="mb-4" asChild>
+        <Link href="/">
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back to Products
+        </Link>
+      </Button>
+      
+      <div className="bg-background shadow-sm rounded-lg overflow-hidden">
+        <div className="md:flex">
+          <div className="md:w-1/2">
+            <Image
+              src={product.image}
+              alt={product.name}
+              width={400}
+              height={400}
+              className="w-full h-auto object-cover"
+            />
+          </div>
+          <div className="p-6 md:w-1/2">
+            <h1 className="text-3xl font-bold mb-2">{product.name}</h1>
+            <p className="text-sm text-muted-foreground mb-4">
+              Category: {getCategoryEmoji(product.category)} {product.category}
+            </p>
+            <Link 
+              href={product.link}
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-primary hover:underline inline-flex items-center mb-6"
+            >
+              Visit Product Page
+              <ExternalLink className="ml-2 h-4 w-4" />
+            </Link>
+            <p className="text-lg mb-6">{product.description}</p>
             <Button 
-              variant="outline" 
-              size="sm" 
+              className="w-full sm:w-auto"
               onClick={handleUpvote}
-              className={product.upvoted ? 'bg-primary text-primary-foreground' : ''}
+              variant={product.upvoted ? "default" : "outline"}
             >
               <ThumbsUp className="mr-2 h-4 w-4" />
-              {product.upvotes}
+              Upvote ({product.upvotes})
             </Button>
           </div>
         </div>

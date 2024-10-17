@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Product } from './ProductOverview';
 import { ThumbsUp } from 'lucide-react';
 import Link from 'next/link';
+import { categories } from '@/src/utils/categories';
 
 type ProductListProps = {
   products: Product[];
@@ -10,6 +11,11 @@ type ProductListProps = {
 };
 
 export default function ProductList({ products, onUpvote }: ProductListProps) {
+  const getCategoryEmoji = (categoryName: string) => {
+    const category = categories.find(cat => cat.name === categoryName);
+    return category ? category.icon : '🌐'; // Default to globe emoji if category not found
+  };
+
   return (
     <Table>
       <TableHeader>
@@ -35,7 +41,9 @@ export default function ProductList({ products, onUpvote }: ProductListProps) {
                 <span className="cursor-pointer hover:underline">{product.name}</span>
               </Link>
             </TableCell>
-            <TableCell>{product.category}</TableCell>
+            <TableCell>
+              {getCategoryEmoji(product.category)} {product.category}
+            </TableCell>
             <TableCell>{product.description}</TableCell>
             <TableCell>
               <a 
