@@ -1,13 +1,25 @@
 "use client"
 
 import { useState, useEffect } from 'react';
-import { ArrowLeft, ExternalLink, ThumbsUp } from "lucide-react"
+import { ArrowLeft, ExternalLink, ThumbsUp, Edit, Eye } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import Link from "next/link"
 import Image from "next/image"
 import { Product } from './ProductOverview';
 import { useRouter } from 'next/navigation';
 import { categories } from '@/src/utils/categories';
+import dynamic from 'next/dynamic';
+
+const MDEditor = dynamic(
+  () => import("@uiw/react-md-editor").then((mod) => mod.default),
+  { ssr: false }
+);
+
+const MDPreview = dynamic(
+  () => import("@uiw/react-markdown-preview").then((mod) => mod.default),
+  { ssr: false }
+);
 
 type ProductDetailProps = {
   product: Product;
@@ -15,6 +27,8 @@ type ProductDetailProps = {
 
 export default function ProductDetail({ product: initialProduct }: ProductDetailProps) {
   const [product, setProduct] = useState(initialProduct);
+  const [comment, setComment] = useState("");
+  const [activeTab, setActiveTab] = useState<'write' | 'preview'>('write');
   const router = useRouter();
 
   useEffect(() => {
@@ -45,6 +59,24 @@ export default function ProductDetail({ product: initialProduct }: ProductDetail
     localStorage.setItem('products', JSON.stringify(updatedProducts));
   };
 
+  const handleCommentSubmit = () => {
+    // Here you would typically send the comment to your backend
+    console.log("Submitted comment:", comment);
+    // Clear the comment field after submission
+    setComment("");
+  };
+
+  const customMDPreviewStyles = `
+    .wmde-markdown ul {
+      list-style-type: disc;
+      padding-left: 2em;
+    }
+    .wmde-markdown ol {
+      list-style-type: decimal;
+      padding-left: 2em;
+    }
+  `;
+
   return (
     <div className="container mx-auto px-4 py-8">
       <Button variant="ghost" className="mb-4" asChild>
@@ -54,7 +86,7 @@ export default function ProductDetail({ product: initialProduct }: ProductDetail
         </Link>
       </Button>
       
-      <div className="bg-background shadow-sm rounded-lg overflow-hidden">
+      <div className="bg-background shadow-sm rounded-lg overflow-hidden mb-8">
         <div className="md:flex">
           <div className="md:w-1/2">
             <Image
@@ -89,6 +121,43 @@ export default function ProductDetail({ product: initialProduct }: ProductDetail
               Upvote ({product.upvotes})
             </Button>
           </div>
+        </div>
+      </div>
+
+      <div className="bg-background shadow-sm rounded-lg overflow-hidden p-6">
+        <h2 className="text-2xl font-bold mb-4">Add a comment</h2>
+        <Tabs defaultValue="write" className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="write">
+              <Edit className="mr-2 h-4 w-4" />
+              Write
+            </TabsTrigger>
+            <TabsTrigger value="preview">
+              <Eye className="mr-2 h-4 w-4" />
+              Preview
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent value="write" className="mt-4">
+            <MDEditor
+              value={comment}
+              onChange={(value?: string) => setComment(value || "")}
+              preview="edit"
+              height={200}
+              className="min-h-[200px]"
+              textareaProps={{
+                placeholder: "Write your comment here...",
+              }}
+            />
+          </TabsContent>
+          <TabsContent value="preview" className="mt-4">
+            <div className="border rounded-md p-4 min-h-[200px] bg-background">
+              <style>{customMDPreviewStyles}</style>
+              <MDPreview source={comment} />
+            </div>
+          </TabsContent>
+        </Tabs>
+        <div className="flex justify-end mt-4">
+          <Button onClick={handleCommentSubmit}>Submit Comment</Button>
         </div>
       </div>
     </div>
