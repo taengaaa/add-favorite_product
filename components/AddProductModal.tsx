@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -10,6 +10,8 @@ import { Label } from '@/components/ui/label';
 import { Upload, CheckCircle, XCircle, X } from 'lucide-react';
 import { Product } from './ProductOverview';
 import { categories } from '@/src/utils/categories';
+import { supabase } from '@/lib/supabase';
+import { useToast } from "@/hooks/use-toast"
 
 type AddProductModalProps = {
   isOpen: boolean;
@@ -24,16 +26,71 @@ export default function AddProductModal({ isOpen, onClose, onAddProduct }: AddPr
   const [image, setImage] = useState('');
   const [link, setLink] = useState('');
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
+  const { toast } = useToast()
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onAddProduct({ id: '', name, description, category, image, link, upvotes: 0, upvoted: false });
-    onClose();
-    setName('');
-    setDescription('');
-    setCategory('');
-    setImage('');
-    setLink('');
+    setIsSubmitting(true);
+    
+    if (!name || !description || !category || !image || !link) {
+      toast({
+        title: "Validation Error",
+        description: "Please fill in all fields before submitting.",
+        variant: "destructive",
+      })
+      setIsSubmitting(false);
+      return;
+    }
+
+    const newProduct = {
+      name,
+      description,
+      category,
+      image,
+      link,
+      upvotes: 0,
+    };
+
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .insert(newProduct)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Supabase error:', error);
+        throw new Error(error.message || 'An error occurred while adding the product');
+      }
+
+      if (data) {
+        onAddProduct(data);
+        onClose();
+        resetForm();
+        toast({
+          title: "Success",
+          description: "Product added successfully!",
+        })
+      } else {
+        throw new Error('No data returned from the server');
+      }
+    } catch (error) {
+      console.error('Error adding product:', error);
+      let errorMessage = "An unexpected error occurred. Please try again.";
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      
+      toast({
+        title: "Error Adding Product",
+        description: errorMessage,
+        variant: "destructive",
+      })
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -47,6 +104,11 @@ export default function AddProductModal({ isOpen, onClose, onAddProduct }: AddPr
       };
       reader.onerror = () => {
         setUploadStatus('error');
+        toast({
+          title: "Image Upload Error",
+          description: "Failed to upload the image. Please try again.",
+          variant: "destructive",
+        })
       };
       reader.readAsDataURL(file);
     }
@@ -57,11 +119,22 @@ export default function AddProductModal({ isOpen, onClose, onAddProduct }: AddPr
     setUploadStatus('idle');
   };
 
+  const resetForm = () => {
+    setName('');
+    setDescription('');
+    setCategory('');
+    setImage('');
+    setLink('');
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Add New Product</DialogTitle>
+          <DialogDescription className="sr-only">
+            Form to add a new product
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -139,7 +212,9 @@ export default function AddProductModal({ isOpen, onClose, onAddProduct }: AddPr
             <Label htmlFor="link">Link</Label>
             <Input id="link" type="url" value={link} onChange={(e) => setLink(e.target.value)} required />
           </div>
-          <Button type="submit">Add Product</Button>
+          <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? 'Adding...' : 'Add Product'}
+          </Button>
         </form>
       </DialogContent>
     </Dialog>

@@ -1,79 +1,64 @@
+"use client";
+
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Product } from './ProductOverview';
 import { ThumbsUp } from 'lucide-react';
 import Link from 'next/link';
 import { categories } from '@/src/utils/categories';
+import { Product } from './ProductOverview';
 
-type ProductListProps = {
+interface ProductListProps {
   products: Product[];
-  onUpvote: (productId: string) => void;
-};
+  onUpvote: (productId: number) => void;
+}
 
-export default function ProductList({ products, onUpvote }: ProductListProps) {
-  const getCategoryEmoji = (categoryName: string) => {
-    const category = categories.find(cat => cat.name === categoryName);
-    return category ? category.icon : '🌐'; // Default to globe emoji if category not found
-  };
-
+const ProductList = ({ products, onUpvote }: ProductListProps) => {
   return (
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>Image</TableHead>
-          <TableHead>Name</TableHead>
-          <TableHead>Category</TableHead>
+          <TableHead className="w-[100px]">Name</TableHead>
           <TableHead>Description</TableHead>
-          <TableHead>Link</TableHead>
-          <TableHead>Upvotes</TableHead>
+          <TableHead>Category</TableHead>
+          <TableHead className="text-right">Upvotes</TableHead>
+          <TableHead className="text-right">Actions</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {products.map((product) => (
           <TableRow key={product.id}>
-            <TableCell>
-              <Link href={`/product/${product.id}`} passHref>
-                <img src={product.image} alt={product.name} className="w-16 h-16 object-cover rounded-md cursor-pointer" />
-              </Link>
-            </TableCell>
-            <TableCell>
-              <Link href={`/product/${product.id}`} passHref>
-                <span className="cursor-pointer hover:underline">{product.name}</span>
-              </Link>
-            </TableCell>
-            <TableCell>
-              {getCategoryEmoji(product.category)} {product.category}
-            </TableCell>
+            <TableCell className="font-medium">{product.name}</TableCell>
             <TableCell>{product.description}</TableCell>
             <TableCell>
-              <a 
-                href={product.link} 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                className="text-blue-500 hover:underline"
-                onClick={(e) => e.stopPropagation()}
-              >
-                View
-              </a>
+              {product.category ? (
+                <>
+                  {categories.find(cat => cat.name === product.category)?.icon || '🌐'} {product.category}
+                </>
+              ) : (
+                'N/A'
+              )}
             </TableCell>
-            <TableCell>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  onUpvote(product.id);
-                }}
-                className={product.upvoted ? 'bg-primary text-primary-foreground' : ''}
+            <TableCell className="text-right">{product.upvotes}</TableCell>
+            <TableCell className="text-right">
+              <Button
+                variant="outline"
+                size="sm"
+                className="mr-2"
+                onClick={() => onUpvote(product.id)}
               >
-                <ThumbsUp className="mr-2 h-4 w-4" />
-                {product.upvotes}
+                <ThumbsUp className="mr-2 h-4 w-4" /> Like
               </Button>
+              <Link href={`/product/${product.id}`} passHref>
+                <Button variant="outline" size="sm">
+                  View
+                </Button>
+              </Link>
             </TableCell>
           </TableRow>
         ))}
       </TableBody>
     </Table>
   );
-}
+};
+
+export default ProductList;

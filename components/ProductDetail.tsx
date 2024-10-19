@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabase';
 import { ArrowLeft, ExternalLink, ThumbsUp, Edit, Eye } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -10,6 +11,7 @@ import { Product } from './ProductOverview';
 import { useRouter } from 'next/navigation';
 import { categories } from '@/src/utils/categories';
 import dynamic from 'next/dynamic';
+import { useToast } from "@/hooks/use-toast"
 
 const MDEditor = dynamic(
   () => import("@uiw/react-md-editor").then((mod) => mod.default),
@@ -28,42 +30,146 @@ type ProductDetailProps = {
 export default function ProductDetail({ product: initialProduct }: ProductDetailProps) {
   const [product, setProduct] = useState(initialProduct);
   const [comment, setComment] = useState("");
+  const [comments, setComments] = useState<Comment[]>([]);
   const [activeTab, setActiveTab] = useState<'write' | 'preview'>('write');
   const router = useRouter();
+  const { toast } = useToast()
 
   useEffect(() => {
-    const storedProducts = JSON.parse(localStorage.getItem('products') || '[]');
-    const actualProduct = storedProducts.find((p: Product) => p.id === initialProduct.id);
-    if (actualProduct) {
-      setProduct(actualProduct);
-    }
+    fetchProduct();
+    fetchComments();
   }, [initialProduct.id]);
+
+  const fetchProduct = async () => {
+    const { data, error } = await supabase
+      .from('products')
+      .select('*')
+      .eq('id', initialProduct.id)
+      .single();
+    if (error) {
+      console.error('Error fetching product:', error);
+      toast({
+        title: "Error",
+        description: `Failed to fetch product: ${error.message}`,
+        variant: "destructive",
+      })
+    } else if (data) {
+      setProduct(data);
+    }
+  };
+
+  const fetchComments = async () => {
+    const { data, error } = await supabase
+      .from('comments')
+      .select('*')
+      .eq('product_id', initialProduct.id)
+      .order('created_at', { ascending: false });
+    if (error) {
+      console.error('Error fetching comments:', error);
+      toast({
+        title: "Error",
+        description: `Failed to fetch comments: ${error.message}`,
+        variant: "destructive",
+      })
+    } else {
+      setComments(data || []);
+    }
+  };
 
   const getCategoryEmoji = (categoryName: string) => {
     const category = categories.find(cat => cat.name === categoryName);
     return category ? category.icon : '🌐'; // Default to globe emoji if category not found
   };
 
-  const handleUpvote = () => {
-    const updatedProduct = {
-      ...product,
-      upvotes: product.upvoted ? product.upvotes - 1 : product.upvotes + 1,
-      upvoted: !product.upvoted
-    };
-    setProduct(updatedProduct);
+  const handleUpvote = async () => {
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    if (userError) {
+      console.error('User authentication error:', userError);
+      toast({
+        title: "Authentication Error",
+        description: "Please sign in to upvote products.",
+        variant: "destructive",
+      })
+      return;
+    }
+    if (!userData.user) {
+      toast({
+        title: "Authentication Required",
+        description: "Please sign in to upvote products.",
+        variant: "destructive",
+      })
+      return;
+    }
 
-    const storedProducts = JSON.parse(localStorage.getItem('products') || '[]');
-    const updatedProducts = storedProducts.map((p: Product) => 
-      p.id === updatedProduct.id ? updatedProduct : p
-    );
-    localStorage.setItem('products', JSON.stringify(updatedProducts));
+    const { error } = await supabase
+      .rpc('toggle_upvote', { product_id: product.id, user_id: userData.user.id });
+
+    if (error) {
+      console.error('Error upvoting:', error);
+      toast({
+        title: "Upvote Error",
+        description: `Failed to upvote: ${error.message}`,
+        variant: "destructive",
+      })
+    } else {
+      fetchProduct();
+      toast({
+        title: "Success",
+        description: "Your vote has been recorded.",
+      })
+    }
   };
 
-  const handleCommentSubmit = () => {
-    // Here you would typically send the comment to your backend
-    console.log("Submitted comment:", comment);
-    // Clear the comment field after submission
-    setComment("");
+  const handleCommentSubmit = async () => {
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    if (userError) {
+      console.error('User authentication error:', userError);
+      toast({
+        title: "Authentication Error",
+        description: "Please sign in to comment.",
+        variant: "destructive",
+      })
+      return;
+    }
+    if (!userData.user) {
+      toast({
+        title: "Authentication Required",
+        description: "Please sign in to comment.",
+        variant: "destructive",
+      })
+      return;
+    }
+
+    if (!comment.trim()) {
+      toast({
+        title: "Comment Error",
+        description: "Please enter a comment before submitting.",
+        variant: "destructive",
+      })
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('comments')
+      .insert([{ product_id: product.id, user_id: userData.user.id, content: comment }])
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error submitting comment:', error);
+      toast({
+        title: "Comment Error",
+        description: `Failed to submit comment: ${error.message}`,
+        variant: "destructive",
+      })
+    } else if (data) {
+      setComments([data, ...comments]);
+      setComment("");
+      toast({
+        title: "Success",
+        description: "Your comment has been posted.",
+      })
+    }
   };
 
   const customMDPreviewStyles = `

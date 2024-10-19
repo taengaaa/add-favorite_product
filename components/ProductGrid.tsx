@@ -1,14 +1,16 @@
+"use client";
+
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Product } from './ProductOverview';
 import { ThumbsUp } from 'lucide-react';
 import Link from 'next/link';
 import { categories } from '@/src/utils/categories';
+import { Product } from './ProductOverview';
 
-type ProductGridProps = {
+interface ProductGridProps {
   products: Product[];
-  onUpvote: (productId: string) => void;
-};
+  onUpvote: (productId: number) => void;
+}
 
 export default function ProductGrid({ products, onUpvote }: ProductGridProps) {
   const getCategoryEmoji = (categoryName: string) => {
@@ -49,7 +51,6 @@ export default function ProductGrid({ products, onUpvote }: ProductGridProps) {
                 e.preventDefault();
                 onUpvote(product.id);
               }}
-              className={product.upvoted ? 'bg-primary text-primary-foreground' : ''}
             >
               <ThumbsUp className="mr-2 h-4 w-4" />
               {product.upvotes}

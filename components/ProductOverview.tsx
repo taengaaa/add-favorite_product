@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -9,17 +10,18 @@ import AddProductModal from './AddProductModal';
 import ProductList from './ProductList';
 import ProductGrid from './ProductGrid';
 import { categories } from '@/src/utils/categories';
+import { useToast } from "@/hooks/use-toast"
 
-export type Product = {
-  id: string;
+export interface Product {
+  id: number;
   name: string;
   description: string;
   category: string;
   image: string;
   link: string;
   upvotes: number;
-  upvoted: boolean;
-};
+  created_at: string;
+}
 
 export default function ProductOverview() {
   const [isGridView, setIsGridView] = useState(true);
@@ -28,36 +30,88 @@ export default function ProductOverview() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [minVotes, setMinVotes] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast()
 
   useEffect(() => {
-    // Load products from localStorage when the component mounts
-    const storedProducts = JSON.parse(localStorage.getItem('products') || '[]');
-    setProducts(storedProducts);
-  }, []);
+    fetchProducts();
+  }, [searchTerm, selectedCategory, minVotes]);
 
-  const addProduct = (product: Product) => {
-    const newProduct = { ...product, id: Date.now().toString(), upvotes: 0, upvoted: false };
-    const updatedProducts = [...products, newProduct];
-    setProducts(updatedProducts);
-    // Save updated products to localStorage
-    localStorage.setItem('products', JSON.stringify(updatedProducts));
+  const fetchProducts = async () => {
+    setLoading(true);
+    let query = supabase
+      .from('products')
+      .select('*')
+      .order('upvotes', { ascending: false });
+
+    if (searchTerm) {
+      query = query.ilike('name', `%${searchTerm}%`);
+    }
+
+    if (selectedCategory !== 'All') {
+      query = query.eq('category', selectedCategory);
+    }
+
+    if (minVotes > 0) {
+      query = query.gte('upvotes', minVotes);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('Error fetching products:', error);
+      toast({
+        title: "Error",
+        description: `Failed to fetch products: ${error.message}`,
+        variant: "destructive",
+      })
+    } else {
+      setProducts(data || []);
+    }
+    setLoading(false);
   };
 
-  const handleUpvote = (productId: string) => {
-    const updatedProducts = products.map(product => {
-      if (product.id === productId) {
-        const upvoted = !product.upvoted;
-        return {
-          ...product,
-          upvotes: upvoted ? product.upvotes + 1 : product.upvotes - 1,
-          upvoted: upvoted
-        };
-      }
-      return product;
-    });
-    setProducts(updatedProducts);
-    // Save updated products to localStorage
-    localStorage.setItem('products', JSON.stringify(updatedProducts));
+  const addProduct = async (product: Omit<Product, 'id' | 'upvotes' | 'created_at'>) => {
+    const { data, error } = await supabase
+      .from('products')
+      .insert([{ ...product, upvotes: 0 }])
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error adding product:', error);
+      toast({
+        title: "Error",
+        description: `Failed to add product: ${error.message}`,
+        variant: "destructive",
+      })
+    } else if (data) {
+      fetchProducts();
+      toast({
+        title: "Success",
+        description: "Product added successfully",
+      })
+    }
+  };
+
+  const handleUpvote = async (productId: number) => {
+    const { data, error } = await supabase
+      .from('products')
+      .update({ upvotes: products.find(p => p.id === productId)!.upvotes + 1 })
+      .eq('id', productId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error upvoting:', error);
+      toast({
+        title: "Error",
+        description: `Failed to upvote: ${error.message}`,
+        variant: "destructive",
+      })
+    } else if (data) {
+      fetchProducts();
+    }
   };
 
   const filteredProducts = useMemo(() => {
@@ -82,6 +136,7 @@ export default function ProductOverview() {
             <SelectValue placeholder="Select a category" />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem value="All">All Categories</SelectItem>
             {categories.map((cat) => (
               <SelectItem key={cat.name} value={cat.name}>
                 {cat.icon} {cat.name}
@@ -121,7 +176,9 @@ export default function ProductOverview() {
           <Button onClick={() => setIsModalOpen(true)}>Add Product</Button>
         </div>
       </div>
-      {isGridView ? (
+      {loading ? (
+        <div>Loading products...</div>
+      ) : isGridView ? (
         <ProductGrid products={filteredProducts} onUpvote={handleUpvote} />
       ) : (
         <ProductList products={filteredProducts} onUpvote={handleUpvote} />
