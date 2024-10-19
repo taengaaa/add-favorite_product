@@ -11,22 +11,27 @@ async function getProduct(id: string) {
 
   if (error) {
     console.error('Error fetching product:', error);
-    return null;
+    throw new Error(`Failed to fetch product: ${error.message}`);
   }
 
   return data;
 }
 
 export default async function ProductDetailPage({ params }: { params: { id: string } }) {
-  const product = await getProduct(params.id);
+  try {
+    const product = await getProduct(params.id);
 
-  if (!product) {
-    notFound();
+    if (!product) {
+      notFound();
+    }
+
+    return (
+      <div className="container mx-auto p-4">
+        <ProductDetail product={product} />
+      </div>
+    );
+  } catch (error) {
+    console.error('Error in ProductDetailPage:', error);
+    throw error; // This will trigger the closest error boundary
   }
-
-  return (
-    <div className="container mx-auto p-4">
-      <ProductDetail product={product} />
-    </div>
-  );
 }

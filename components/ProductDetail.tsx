@@ -83,25 +83,16 @@ export default function ProductDetail({ product: initialProduct }: ProductDetail
 
   const handleUpvote = async () => {
     const { data: userData, error: userError } = await supabase.auth.getUser();
-    if (userError) {
-      console.error('User authentication error:', userError);
-      toast({
-        title: "Authentication Error",
-        description: "Please sign in to upvote products.",
-        variant: "destructive",
-      })
-      return;
-    }
-    if (!userData.user) {
+    if (userError || !userData.user) {
       toast({
         title: "Authentication Required",
         description: "Please sign in to upvote products.",
         variant: "destructive",
-      })
+      });
       return;
     }
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .rpc('toggle_upvote', { product_id: product.id, user_id: userData.user.id });
 
     if (error) {
@@ -110,36 +101,17 @@ export default function ProductDetail({ product: initialProduct }: ProductDetail
         title: "Upvote Error",
         description: `Failed to upvote: ${error.message}`,
         variant: "destructive",
-      })
+      });
     } else {
       fetchProduct();
       toast({
         title: "Success",
         description: "Your vote has been recorded.",
-      })
+      });
     }
   };
 
   const handleCommentSubmit = async () => {
-    const { data: userData, error: userError } = await supabase.auth.getUser();
-    if (userError) {
-      console.error('User authentication error:', userError);
-      toast({
-        title: "Authentication Error",
-        description: "Please sign in to comment.",
-        variant: "destructive",
-      })
-      return;
-    }
-    if (!userData.user) {
-      toast({
-        title: "Authentication Required",
-        description: "Please sign in to comment.",
-        variant: "destructive",
-      })
-      return;
-    }
-
     if (!comment.trim()) {
       toast({
         title: "Comment Error",
@@ -151,7 +123,7 @@ export default function ProductDetail({ product: initialProduct }: ProductDetail
 
     const { data, error } = await supabase
       .from('comments')
-      .insert([{ product_id: product.id, user_id: userData.user.id, content: comment }])
+      .insert([{ product_id: product.id, content: comment }])
       .select()
       .single();
 

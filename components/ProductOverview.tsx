@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Grid2X2, List } from 'lucide-react';
+import { Grid2X2, List, Loader2 } from 'lucide-react';
 import AddProductModal from './AddProductModal';
 import ProductList from './ProductList';
 import ProductGrid from './ProductGrid';
@@ -31,11 +31,12 @@ export default function ProductOverview() {
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [minVotes, setMinVotes] = useState(0);
   const [loading, setLoading] = useState(true);
-  const { toast } = useToast()
+  const [isAddingProduct, setIsAddingProduct] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     fetchProducts();
-  }, [searchTerm, selectedCategory, minVotes]);
+  }, []);
 
   const fetchProducts = async () => {
     setLoading(true);
@@ -43,18 +44,6 @@ export default function ProductOverview() {
       .from('products')
       .select('*')
       .order('upvotes', { ascending: false });
-
-    if (searchTerm) {
-      query = query.ilike('name', `%${searchTerm}%`);
-    }
-
-    if (selectedCategory !== 'All') {
-      query = query.eq('category', selectedCategory);
-    }
-
-    if (minVotes > 0) {
-      query = query.gte('upvotes', minVotes);
-    }
 
     const { data, error } = await query;
 
@@ -72,6 +61,7 @@ export default function ProductOverview() {
   };
 
   const addProduct = async (product: Omit<Product, 'id' | 'upvotes' | 'created_at'>) => {
+    setIsAddingProduct(true);
     const { data, error } = await supabase
       .from('products')
       .insert([{ ...product, upvotes: 0 }])
@@ -86,12 +76,13 @@ export default function ProductOverview() {
         variant: "destructive",
       })
     } else if (data) {
-      fetchProducts();
+      setProducts(prevProducts => [data, ...prevProducts]);
       toast({
         title: "Success",
         description: "Product added successfully",
       })
     }
+    setIsAddingProduct(false);
   };
 
   const handleUpvote = async (productId: number) => {
@@ -110,7 +101,9 @@ export default function ProductOverview() {
         variant: "destructive",
       })
     } else if (data) {
-      fetchProducts();
+      setProducts(prevProducts => 
+        prevProducts.map(p => p.id === productId ? data : p)
+      );
     }
   };
 
@@ -177,7 +170,9 @@ export default function ProductOverview() {
         </div>
       </div>
       {loading ? (
-        <div>Loading products...</div>
+        <div className="flex justify-center items-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
       ) : isGridView ? (
         <ProductGrid products={filteredProducts} onUpvote={handleUpvote} />
       ) : (
@@ -187,7 +182,16 @@ export default function ProductOverview() {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onAddProduct={addProduct}
+        isLoading={isAddingProduct}
       />
+      {isAddingProduct && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
+          <div className="bg-white p-4 rounded-md shadow-lg flex items-center">
+            <Loader2 className="h-6 w-6 animate-spin mr-2" />
+            <span>Adding product...</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

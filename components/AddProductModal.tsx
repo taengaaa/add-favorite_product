@@ -7,19 +7,21 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { Upload, CheckCircle, XCircle, X } from 'lucide-react';
+import { Upload, CheckCircle, XCircle, X, Loader2 } from 'lucide-react';
 import { Product } from './ProductOverview';
 import { categories } from '@/src/utils/categories';
 import { supabase } from '@/lib/supabase';
 import { useToast } from "@/hooks/use-toast"
+import { PostgrestError } from '@supabase/supabase-js';
 
 type AddProductModalProps = {
   isOpen: boolean;
   onClose: () => void;
-  onAddProduct: (product: Product) => void;
+  onAddProduct: (product: Omit<Product, 'id' | 'upvotes' | 'created_at'>) => Promise<void>;
+  isLoading: boolean;
 };
 
-export default function AddProductModal({ isOpen, onClose, onAddProduct }: AddProductModalProps) {
+export default function AddProductModal({ isOpen, onClose, onAddProduct, isLoading }: AddProductModalProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('');
@@ -28,75 +30,66 @@ export default function AddProductModal({ isOpen, onClose, onAddProduct }: AddPr
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
   const { toast } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitting(true);
     
-    if (!name || !description || !category || !image || !link) {
+    if (!name || !description || !category || !file || !link) {
       toast({
         title: "Validation Error",
         description: "Please fill in all fields before submitting.",
         variant: "destructive",
-      })
-      setIsSubmitting(false);
+      });
       return;
     }
 
-    const newProduct = {
-      name,
-      description,
-      category,
-      image,
-      link,
-      upvotes: 0,
-    };
+    setIsSubmitting(true);
 
     try {
-      const { data, error } = await supabase
-        .from('products')
-        .insert(newProduct)
-        .select()
-        .single();
+      const fileName = `${Date.now()}-${file.name}`;
+      const { data: imageData, error: imageError } = await supabase.storage
+        .from('product-images')
+        .upload(fileName, file);
 
-      if (error) {
-        console.error('Supabase error:', error);
-        throw new Error(error.message || 'An error occurred while adding the product');
-      }
+      if (imageError) throw new Error(`Error uploading image: ${imageError.message}`);
 
-      if (data) {
-        onAddProduct(data);
-        onClose();
-        resetForm();
-        toast({
-          title: "Success",
-          description: "Product added successfully!",
-        })
-      } else {
-        throw new Error('No data returned from the server');
-      }
+      const { data: { publicUrl } } = supabase.storage
+        .from('product-images')
+        .getPublicUrl(fileName);
+
+      const newProduct = {
+        name,
+        description,
+        category,
+        image: publicUrl,
+        link,
+      };
+
+      await onAddProduct(newProduct);
+      resetForm();
+      onClose();
+      toast({
+        title: "Success!",
+        description: "Your product has been successfully added.",
+      });
     } catch (error) {
       console.error('Error adding product:', error);
-      let errorMessage = "An unexpected error occurred. Please try again.";
-      
-      if (error instanceof Error) {
-        errorMessage = error.message;
-      }
-      
       toast({
         title: "Error Adding Product",
-        description: errorMessage,
+        description: error instanceof Error ? error.message : "An unexpected error occurred. Please try again.",
         variant: "destructive",
-      })
+      });
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
+    const selectedFile = e.target.files?.[0];
+    if (selectedFile) {
       setUploadStatus('uploading');
+      setFile(selectedFile);
       const reader = new FileReader();
       reader.onloadend = () => {
         setImage(reader.result as string);
@@ -110,12 +103,13 @@ export default function AddProductModal({ isOpen, onClose, onAddProduct }: AddPr
           variant: "destructive",
         })
       };
-      reader.readAsDataURL(file);
+      reader.readAsDataURL(selectedFile);
     }
   };
 
   const handleRemoveImage = () => {
     setImage('');
+    setFile(null);
     setUploadStatus('idle');
   };
 
@@ -212,8 +206,15 @@ export default function AddProductModal({ isOpen, onClose, onAddProduct }: AddPr
             <Label htmlFor="link">Link</Label>
             <Input id="link" type="url" value={link} onChange={(e) => setLink(e.target.value)} required />
           </div>
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? 'Adding...' : 'Add Product'}
+          <Button type="submit" disabled={isSubmitting || isLoading}>
+            {isSubmitting || isLoading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Adding...
+              </>
+            ) : (
+              'Add Product'
+            )}
           </Button>
         </form>
       </DialogContent>
