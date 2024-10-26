@@ -11,9 +11,11 @@ import ProductList from './ProductList';
 import ProductGrid from './ProductGrid';
 import { categories } from '@/src/utils/categories';
 import { useToast } from "@/hooks/use-toast"
+import { v4 as uuidv4 } from 'uuid';
+import { cn } from '@/lib/utils';
 
 export interface Product {
-  id: number;
+  id: string; // Change this to string to accommodate UUID
   name: string;
   description: string;
   category: string;
@@ -33,9 +35,17 @@ export default function ProductOverview() {
   const [loading, setLoading] = useState(true);
   const [isAddingProduct, setIsAddingProduct] = useState(false);
   const { toast } = useToast();
+  const [userUpvotes, setUserUpvotes] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetchProducts();
+    fetchUserUpvotes();
+    // Generate or retrieve the user's unique identifier
+    let userId = localStorage.getItem('userId');
+    if (!userId) {
+      userId = uuidv4();
+      localStorage.setItem('userId', userId);
+    }
   }, []);
 
   const fetchProducts = async () => {
@@ -58,6 +68,27 @@ export default function ProductOverview() {
       setProducts(data || []);
     }
     setLoading(false);
+  };
+
+  const fetchUserUpvotes = async () => {
+    const userId = localStorage.getItem('userId');
+    if (!userId) return;
+
+    const { data, error } = await supabase
+      .from('upvotes')
+      .select('product_id')
+      .eq('user_id', userId);
+
+    if (error) {
+      console.error('Error fetching user upvotes:', error);
+      toast({
+        title: "Error",
+        description: `Failed to fetch user upvotes: ${error.message}`,
+        variant: "destructive",
+      });
+    } else {
+      setUserUpvotes(new Set(data.map(item => item.product_id)));
+    }
   };
 
   const addProduct = async (product: Omit<Product, 'id' | 'upvotes' | 'created_at'>) => {
@@ -85,25 +116,41 @@ export default function ProductOverview() {
     setIsAddingProduct(false);
   };
 
-  const handleUpvote = async (productId: number) => {
+  const handleUpvote = async (productId: string) => {
+    const userId = localStorage.getItem('userId');
+    if (!userId) {
+      console.error('User ID not found');
+      return;
+    }
+
     const { data, error } = await supabase
-      .from('products')
-      .update({ upvotes: products.find(p => p.id === productId)!.upvotes + 1 })
-      .eq('id', productId)
-      .select()
-      .single();
+      .rpc('toggle_upvote', { 
+        product_id: productId,
+        user_id: userId 
+      });
 
     if (error) {
-      console.error('Error upvoting:', error);
-      toast({
-        title: "Error",
-        description: `Failed to upvote: ${error.message}`,
-        variant: "destructive",
-      })
-    } else if (data) {
+      console.error('Error toggling upvote:', error);
+      // Remove the toast notification here
+    } else {
+      const newUpvoteState = data as boolean;
       setProducts(prevProducts => 
-        prevProducts.map(p => p.id === productId ? data : p)
+        prevProducts.map(p => 
+          p.id === productId 
+            ? { ...p, upvotes: newUpvoteState ? p.upvotes + 1 : p.upvotes - 1 }
+            : p
+        )
       );
+      setUserUpvotes(prevUpvotes => {
+        const newUpvotes = new Set(prevUpvotes);
+        if (newUpvoteState) {
+          newUpvotes.add(productId);
+        } else {
+          newUpvotes.delete(productId);
+        }
+        return newUpvotes;
+      });
+      // Remove the toast notification here as well
     }
   };
 
@@ -129,7 +176,6 @@ export default function ProductOverview() {
             <SelectValue placeholder="Select a category" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="All">All Categories</SelectItem>
             {categories.map((cat) => (
               <SelectItem key={cat.name} value={cat.name}>
                 {cat.icon} {cat.name}
@@ -154,7 +200,9 @@ export default function ProductOverview() {
             variant="outline"
             size="icon"
             onClick={() => setIsGridView(true)}
-            className={isGridView ? 'bg-primary text-primary-foreground' : ''}
+            className={cn(
+              isGridView && "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground"
+            )}
           >
             <Grid2X2 className="h-4 w-4" />
           </Button>
@@ -162,7 +210,9 @@ export default function ProductOverview() {
             variant="outline"
             size="icon"
             onClick={() => setIsGridView(false)}
-            className={!isGridView ? 'bg-primary text-primary-foreground' : ''}
+            className={cn(
+              !isGridView && "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground"
+            )}
           >
             <List className="h-4 w-4" />
           </Button>
@@ -174,9 +224,9 @@ export default function ProductOverview() {
           <Loader2 className="h-8 w-8 animate-spin" />
         </div>
       ) : isGridView ? (
-        <ProductGrid products={filteredProducts} onUpvote={handleUpvote} />
+        <ProductGrid products={filteredProducts} onUpvote={handleUpvote} userUpvotes={userUpvotes} />
       ) : (
-        <ProductList products={filteredProducts} onUpvote={handleUpvote} />
+        <ProductList products={filteredProducts} onUpvote={handleUpvote} userUpvotes={userUpvotes} />
       )}
       <AddProductModal
         isOpen={isModalOpen}

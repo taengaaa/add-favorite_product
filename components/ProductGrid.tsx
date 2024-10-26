@@ -1,18 +1,22 @@
 "use client";
 
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { ThumbsUp } from 'lucide-react';
 import Link from 'next/link';
 import { categories } from '@/src/utils/categories';
 import { Product } from './ProductOverview';
+import Image from 'next/image';
+import { cn } from "@/lib/utils";
 
 interface ProductGridProps {
   products: Product[];
-  onUpvote: (productId: number) => void;
+  onUpvote: (productId: string) => void;
+  userUpvotes: Set<string>;
 }
 
-export default function ProductGrid({ products, onUpvote }: ProductGridProps) {
+export default function ProductGrid({ products, onUpvote, userUpvotes }: ProductGridProps) {
   const getCategoryEmoji = (categoryName: string) => {
     const category = categories.find(cat => cat.name === categoryName);
     return category ? category.icon : '🌐'; // Default to globe emoji if category not found
@@ -23,27 +27,25 @@ export default function ProductGrid({ products, onUpvote }: ProductGridProps) {
       {products.map((product) => (
         <Card key={product.id}>
           <Link href={`/product/${product.id}`} passHref className="block">
-            <CardHeader>
-              <CardTitle>{product.name}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <img src={product.image} alt={product.name} className="w-full h-48 object-cover mb-2" />
-              <p className="text-sm text-gray-500 mb-2">
-                {getCategoryEmoji(product.category)} {product.category}
-              </p>
-              <p className="text-sm">{product.description}</p>
+            <CardContent className="p-0">
+              <div className="relative w-full h-48">
+                <Image 
+                  src={product.image} 
+                  alt={product.name} 
+                  fill
+                  className="object-cover"
+                  sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                />
+              </div>
+              <div className="p-4">
+                <Badge variant="outline" className="text-sm mb-2 inline-block">
+                  {getCategoryEmoji(product.category)} {product.category}
+                </Badge>
+                <h3 className="text-lg font-semibold">{product.name}</h3>
+              </div>
             </CardContent>
           </Link>
-          <CardFooter className="flex justify-between">
-            <a 
-              href={product.link} 
-              target="_blank" 
-              rel="noopener noreferrer" 
-              className="text-blue-500 hover:underline"
-              onClick={(e) => e.stopPropagation()}
-            >
-              View Product
-            </a>
+          <CardFooter className="flex justify-end">
             <Button 
               variant="outline" 
               size="sm" 
@@ -51,6 +53,9 @@ export default function ProductGrid({ products, onUpvote }: ProductGridProps) {
                 e.preventDefault();
                 onUpvote(product.id);
               }}
+              className={cn(
+                userUpvotes.has(product.id) && "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground"
+              )}
             >
               <ThumbsUp className="mr-2 h-4 w-4" />
               {product.upvotes}

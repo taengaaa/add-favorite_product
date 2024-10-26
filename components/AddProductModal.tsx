@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,15 +30,52 @@ export default function AddProductModal({ isOpen, onClose, onAddProduct, isLoadi
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
   const { toast } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [file, setFile] = useState<File | null>(null);
+  const [isLinkValid, setIsLinkValid] = useState(false);
+  const [isLinkLoading, setIsLinkLoading] = useState(false);
+
+  useEffect(() => {
+    let timeoutId: NodeJS.Timeout;
+    if (link) {
+      setIsLinkLoading(true);
+      timeoutId = setTimeout(() => {
+        fetchLinkPreview(link);
+      }, 500);
+    }
+    return () => clearTimeout(timeoutId);
+  }, [link]);
+
+  const fetchLinkPreview = async (url: string) => {
+    try {
+      const response = await fetch('/api/link-preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
+      const data = await response.json();
+      if (data.image) {
+        setImage(data.image);
+        setUploadStatus('success');
+        setIsLinkValid(true);
+      } else {
+        setUploadStatus('error');
+        setIsLinkValid(false);
+      }
+    } catch (error) {
+      console.error('Error fetching link preview:', error);
+      setUploadStatus('error');
+      setIsLinkValid(false);
+    } finally {
+      setIsLinkLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!name || !description || !category || !file || !link) {
+    if (!name || !description || !category || !isLinkValid || !link) {
       toast({
         title: "Validation Error",
-        description: "Please fill in all fields before submitting.",
+        description: "Please fill in all fields and provide a valid link before submitting.",
         variant: "destructive",
       });
       return;
@@ -47,22 +84,11 @@ export default function AddProductModal({ isOpen, onClose, onAddProduct, isLoadi
     setIsSubmitting(true);
 
     try {
-      const fileName = `${Date.now()}-${file.name}`;
-      const { data: imageData, error: imageError } = await supabase.storage
-        .from('product-images')
-        .upload(fileName, file);
-
-      if (imageError) throw new Error(`Error uploading image: ${imageError.message}`);
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('product-images')
-        .getPublicUrl(fileName);
-
       const newProduct = {
         name,
         description,
         category,
-        image: publicUrl,
+        image,
         link,
       };
 
@@ -85,40 +111,14 @@ export default function AddProductModal({ isOpen, onClose, onAddProduct, isLoadi
     }
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (selectedFile) {
-      setUploadStatus('uploading');
-      setFile(selectedFile);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImage(reader.result as string);
-        setUploadStatus('success');
-      };
-      reader.onerror = () => {
-        setUploadStatus('error');
-        toast({
-          title: "Image Upload Error",
-          description: "Failed to upload the image. Please try again.",
-          variant: "destructive",
-        })
-      };
-      reader.readAsDataURL(selectedFile);
-    }
-  };
-
-  const handleRemoveImage = () => {
-    setImage('');
-    setFile(null);
-    setUploadStatus('idle');
-  };
-
   const resetForm = () => {
     setName('');
     setDescription('');
     setCategory('');
     setImage('');
     setLink('');
+    setUploadStatus('idle');
+    setIsLinkValid(false);
   };
 
   return (
@@ -155,67 +155,42 @@ export default function AddProductModal({ isOpen, onClose, onAddProduct, isLoadi
             </Select>
           </div>
           <div>
-            <Label htmlFor="image">Image</Label>
-            <div className="flex flex-col items-center space-y-4">
-              {uploadStatus !== 'success' ? (
-                <label htmlFor="image-upload" className="flex flex-col items-center justify-center w-full h-64 border-2 border-dashed rounded-lg cursor-pointer bg-gray-50 dark:hover:bg-bray-800 dark:bg-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:hover:border-gray-500 dark:hover:bg-gray-600">
-                  <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                    <Upload className="w-8 h-8 mb-4 text-gray-500 dark:text-gray-400" />
-                    <p className="mb-2 text-sm text-gray-500 dark:text-gray-400"><span className="font-semibold">Click to upload</span> or drag and drop</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">SVG, PNG, JPG or GIF (MAX. 800x400px)</p>
-                  </div>
-                  <input id="image-upload" type="file" className="hidden" onChange={handleImageUpload} accept="image/*" required />
-                </label>
-              ) : null}
-              
-              {uploadStatus !== 'idle' && (
-                <div className="w-full">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center space-x-2">
-                      {uploadStatus === 'uploading' && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>}
-                      {uploadStatus === 'success' && <CheckCircle className="text-green-500" />}
-                      {uploadStatus === 'error' && <XCircle className="text-red-500" />}
-                      <span className="text-sm">
-                        {uploadStatus === 'uploading' && 'Uploading...'}
-                        {uploadStatus === 'success' && 'Upload successful'}
-                        {uploadStatus === 'error' && 'Upload failed'}
-                      </span>
-                    </div>
-                    {uploadStatus === 'success' && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleRemoveImage}
-                        className="text-red-500 hover:text-red-700"
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
-                  {image && uploadStatus === 'success' && (
-                    <div className="relative w-full h-40 bg-gray-100 rounded-lg overflow-hidden">
-                      <img src={image} alt="Preview" className="w-full h-full object-cover" />
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-          <div>
             <Label htmlFor="link">Link</Label>
-            <Input id="link" type="url" value={link} onChange={(e) => setLink(e.target.value)} required />
-          </div>
-          <Button type="submit" disabled={isSubmitting || isLoading}>
-            {isSubmitting || isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Adding...
-              </>
-            ) : (
-              'Add Product'
+            <Input 
+              id="link" 
+              type="url" 
+              value={link} 
+              onChange={(e) => setLink(e.target.value)} 
+              required 
+            />
+            {isLinkLoading && <Loader2 className="mt-2 h-4 w-4 animate-spin" />}
+            {!isLinkLoading && uploadStatus === 'success' && (
+              <CheckCircle className="mt-2 text-green-500" />
             )}
-          </Button>
+            {!isLinkLoading && uploadStatus === 'error' && (
+              <XCircle className="mt-2 text-red-500" />
+            )}
+          </div>
+          {image && (
+            <div className="mt-4">
+              <Label>Image Preview</Label>
+              <div className="mt-2 relative w-full h-40 bg-gray-100 rounded-lg overflow-hidden">
+                <img src={image} alt="Preview" className="w-full h-full object-cover" />
+              </div>
+            </div>
+          )}
+          <div className="flex justify-end mt-6">
+            <Button type="submit" disabled={isSubmitting || isLoading || !isLinkValid}>
+              {isSubmitting || isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Adding...
+                </>
+              ) : (
+                'Add Product'
+              )}
+            </Button>
+          </div>
         </form>
       </DialogContent>
     </Dialog>

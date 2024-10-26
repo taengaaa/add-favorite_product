@@ -6,53 +6,70 @@ import { ThumbsUp } from 'lucide-react';
 import Link from 'next/link';
 import { categories } from '@/src/utils/categories';
 import { Product } from './ProductOverview';
+import Image from 'next/image';
+import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
 
 interface ProductListProps {
   products: Product[];
-  onUpvote: (productId: number) => void;
+  onUpvote: (productId: string) => void;
+  userUpvotes: Set<string>;
 }
 
-const ProductList = ({ products, onUpvote }: ProductListProps) => {
+const ProductList = ({ products, onUpvote, userUpvotes }: ProductListProps) => {
+  const getCategoryEmoji = (categoryName: string) => {
+    const category = categories.find(cat => cat.name === categoryName);
+    return category ? category.icon : '🌐'; // Default to globe emoji if category not found
+  };
+
   return (
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead className="w-[100px]">Name</TableHead>
+          <TableHead className="w-[100px]">Image</TableHead>
+          <TableHead>Name</TableHead>
           <TableHead>Description</TableHead>
           <TableHead>Category</TableHead>
           <TableHead className="text-right">Upvotes</TableHead>
-          <TableHead className="text-right">Actions</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {products.map((product) => (
           <TableRow key={product.id}>
-            <TableCell className="font-medium">{product.name}</TableCell>
+            <TableCell>
+              <Link href={`/product/${product.id}`} passHref>
+                <Image
+                  src={product.image}
+                  alt={product.name}
+                  width={80}
+                  height={80}
+                  className="object-cover rounded-md"
+                />
+              </Link>
+            </TableCell>
+            <TableCell className="font-medium">
+              <Link href={`/product/${product.id}`} passHref className="hover:underline">
+                {product.name}
+              </Link>
+            </TableCell>
             <TableCell>{product.description}</TableCell>
             <TableCell>
-              {product.category ? (
-                <>
-                  {categories.find(cat => cat.name === product.category)?.icon || '🌐'} {product.category}
-                </>
-              ) : (
-                'N/A'
-              )}
+              <Badge variant="outline" className="text-sm">
+                {getCategoryEmoji(product.category)} {product.category}
+              </Badge>
             </TableCell>
-            <TableCell className="text-right">{product.upvotes}</TableCell>
             <TableCell className="text-right">
               <Button
                 variant="outline"
                 size="sm"
-                className="mr-2"
                 onClick={() => onUpvote(product.id)}
+                className={cn(
+                  userUpvotes.has(product.id) && "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground"
+                )}
               >
-                <ThumbsUp className="mr-2 h-4 w-4" /> Like
+                <ThumbsUp className="mr-2 h-4 w-4" />
+                {product.upvotes}
               </Button>
-              <Link href={`/product/${product.id}`} passHref>
-                <Button variant="outline" size="sm">
-                  View
-                </Button>
-              </Link>
             </TableCell>
           </TableRow>
         ))}
