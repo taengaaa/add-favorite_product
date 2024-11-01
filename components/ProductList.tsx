@@ -19,7 +19,7 @@ interface ProductListProps {
 const ProductList = ({ products, onUpvote, userUpvotes }: ProductListProps) => {
   const getCategoryEmoji = (categoryName: string) => {
     const category = categories.find(cat => cat.name === categoryName);
-    return category ? category.icon : '🌐'; // Default to globe emoji if category not found
+    return category ? category.icon : '🌐';
   };
 
   return (
@@ -28,42 +28,51 @@ const ProductList = ({ products, onUpvote, userUpvotes }: ProductListProps) => {
         <TableRow>
           <TableHead className="w-[100px]">Image</TableHead>
           <TableHead>Name</TableHead>
-          <TableHead>Description</TableHead>
+          <TableHead className="w-[400px]">Description</TableHead>
           <TableHead>Category</TableHead>
-          <TableHead className="text-right">Upvotes</TableHead>
+          <TableHead className="text-right w-[100px]">Upvotes</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {products.map((product) => (
-          <TableRow key={product.id}>
-            <TableCell>
-              <Link href={`/product/${product.id}`} passHref>
-                <Image
-                  src={product.image}
-                  alt={product.name}
-                  width={80}
-                  height={80}
-                  className="object-cover rounded-md"
-                />
-              </Link>
+          <TableRow key={product.id} className="h-20">
+            <TableCell className="p-2">
+              <div className="w-16 h-16 relative">
+                <Link href={`/product/${product.id}`} passHref>
+                  <Image
+                    src={product.image}
+                    alt={product.name}
+                    fill
+                    className="object-cover rounded-md"
+                  />
+                </Link>
+              </div>
             </TableCell>
-            <TableCell className="font-medium">
-              <Link href={`/product/${product.id}`} passHref className="hover:underline">
+            <TableCell className="align-middle">
+              <Link 
+                href={`/product/${product.id}`} 
+                className="hover:underline font-medium line-clamp-1"
+              >
                 {product.name}
               </Link>
             </TableCell>
-            <TableCell>{product.description}</TableCell>
-            <TableCell>
-              <Badge variant="outline" className="text-sm">
+            <TableCell className="align-middle">
+              <div className="line-clamp-2 text-sm text-muted-foreground">
+                {product.description}
+              </div>
+            </TableCell>
+            <TableCell className="align-middle">
+              <Badge variant="outline" className="text-sm whitespace-nowrap">
                 {getCategoryEmoji(product.category)} {product.category}
               </Badge>
             </TableCell>
-            <TableCell className="text-right">
+            <TableCell className="text-right align-middle">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => onUpvote(product.id)}
                 className={cn(
+                  "whitespace-nowrap",
                   userUpvotes.has(product.id) && "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground"
                 )}
               >
