@@ -166,10 +166,10 @@ export default function ProductOverview() {
     <div className="container mx-auto p-4">
       <div className="mb-8">
         <div className="flex flex-col md:flex-row justify-between items-center mb-4">
-          <h1 className="text-3xl font-bold">Favorite Products</h1>
+          <h1 className="text-3xl font-bold">Deine Lieblingsprodukte</h1>
         </div>
         <p className="text-muted-foreground">
-          Discover and share your favorite products with our community. Easily browse, upvote, and discuss the latest and greatest items across various categories.
+          Entdecke und teile deine Lieblingsprodukte mit unserer Community. Durchstöbere, bewerte und diskutiere die neuesten und besten Produkte aus verschiedenen Kategorien.
         </p>
       </div>
 

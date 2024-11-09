@@ -1,27 +1,123 @@
 import { NextResponse } from 'next/server';
-import * as cheerio from 'cheerio';
+import puppeteer from 'puppeteer';
 
 export async function POST(req: Request) {
   try {
     const { url } = await req.json();
+    
+    // Spezifische Prüfung für Migros Produkt-URLs
+    const isMigrosProductUrl = url.match(/migros\.ch\/[a-z]{2}\/product\/\d+/);
 
-    const response = await fetch(url);
-    const html = await response.text();
-    const $ = cheerio.load(html);
+    const browser = await puppeteer.launch({
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--window-size=1280,800'
+      ]
+    });
 
-    let image = $('meta[property="og:image"]').attr('content') ||
-                $('meta[name="twitter:image"]').attr('content') ||
-                $('link[rel="image_src"]').attr('href') ||
-                $('img').first().attr('src');
+    try {
+      const page = await browser.newPage();
+      
+      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36');
+      
+      // Migros-spezifische Headers
+      await page.setExtraHTTPHeaders({
+        'Accept-Language': 'de-CH,de;q=0.9',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
+      });
 
-    if (image && !image.startsWith('http')) {
-      const baseUrl = new URL(url).origin;
-      image = new URL(image, baseUrl).href;
+      if (isMigrosProductUrl) {
+        await page.goto(url, { 
+          waitUntil: 'networkidle0',
+          timeout: 15000 
+        });
+
+        const image = await page.evaluate(() => {
+          // Migros-spezifische Meta-Tags und Selektoren
+          const selectors = [
+            // Primäre Migros Selektoren
+            'meta[property="og:image:secure_url"]',
+            'meta[property="og:image"]',
+            // Spezifische Migros Produkt-Bild Selektoren
+            'img[data-testid="product-detail-image"]',
+            'img[class*="ProductImage"]',
+            'img[class*="product-image"]',
+            // Fallback für Migros
+            'img[src*="media.migros.ch"]'
+          ];
+
+          for (const selector of selectors) {
+            const element = document.querySelector(selector);
+            if (element) {
+              if (selector.startsWith('meta')) {
+                const content = element.getAttribute('content');
+                if (content?.includes('media.migros.ch')) return content;
+              } else if (element instanceof HTMLImageElement) {
+                if (element.src.includes('media.migros.ch')) return element.src;
+              }
+            }
+          }
+          return null;
+        });
+
+        if (image) {
+          return NextResponse.json({ image });
+        }
+      }
+
+      // Standard-Logik für andere Shops
+      await page.goto(url, { 
+        waitUntil: 'networkidle0',
+        timeout: 10000 
+      });
+
+      const image = await page.evaluate(() => {
+        const selectors = [
+          'meta[property="og:image"]',
+          'meta[name="twitter:image"]',
+          'img[class*="ProductImage"]',
+          'img[id*="product"][src*="product"]',
+          'img[class*="product"]',
+          'img[class*="gallery-image"]',
+          'img[src*="product"]',
+          'img[width="480"]',
+          'img[width="500"]',
+          'img[width="600"]'
+        ];
+
+        for (const selector of selectors) {
+          const element = document.querySelector(selector);
+          if (element) {
+            if (element.tagName.toLowerCase() === 'img') {
+              return (element as HTMLImageElement).src;
+            } else {
+              return element.getAttribute('content');
+            }
+          }
+        }
+        return null;
+      });
+
+      if (image && !image.startsWith('http')) {
+        const baseUrl = new URL(url).origin;
+        return NextResponse.json({ image: new URL(image, baseUrl).href });
+      }
+
+      return NextResponse.json({ image });
+
+    } finally {
+      await browser.close();
     }
 
-    return NextResponse.json({ image });
   } catch (error) {
-    console.error('Error fetching link preview:', error);
-    return NextResponse.json({ error: 'Failed to fetch link preview' }, { status: 500 });
+    console.error('Error fetching link preview:', error instanceof Error ? error.message : 'Unknown error');
+    return NextResponse.json(
+      { error: 'Failed to fetch link preview' }, 
+      { status: 500 }
+    );
   }
 }
