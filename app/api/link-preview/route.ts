@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import puppeteer from 'puppeteer';
+import puppeteer from 'puppeteer-core';
+import chrome from '@sparticuz/chromium';
 
 export async function POST(req: Request) {
   try {
@@ -8,15 +9,12 @@ export async function POST(req: Request) {
     // Spezifische Prüfung für Migros Produkt-URLs
     const isMigrosProductUrl = url.match(/migros\.ch\/[a-z]{2}\/product\/\d+/);
 
+    const executablePath = await chrome.executablePath;
+
     const browser = await puppeteer.launch({
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--window-size=1280,800'
-      ]
+      args: chrome.args,
+      executablePath,
+      headless: chrome.headless,
     });
 
     try {
