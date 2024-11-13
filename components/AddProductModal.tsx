@@ -44,6 +44,12 @@ export default function AddProductModal({ isOpen, onClose, onAddProduct, isLoadi
     return () => clearTimeout(timeoutId);
   }, [link]);
 
+  useEffect(() => {
+    if (!isOpen) {
+      resetForm();
+    }
+  }, [isOpen]);
+
   const fetchLinkPreview = async (url: string) => {
     try {
       const response = await fetch('/api/link-preview', {
@@ -56,14 +62,65 @@ export default function AddProductModal({ isOpen, onClose, onAddProduct, isLoadi
         setImage(data.image);
         setUploadStatus('success');
         setIsLinkValid(true);
+        toast({
+          title: "Bild erfolgreich gefunden",
+          description: (
+            <div>
+              <p>Verwendeter Selektor: {data.usedSelector}</p>
+              {data.failedSelectors?.length > 0 && (
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-sm text-muted-foreground">
+                    Nicht funktionierende Selektoren ({data.failedSelectors.length})
+                  </summary>
+                  <ul className="mt-1 text-sm text-muted-foreground">
+                    {data.failedSelectors.map((selector: string, index: number) => (
+                      <li key={index} className="ml-4">• {selector}</li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+            </div>
+          ),
+          variant: "default",
+        });
       } else {
         setUploadStatus('error');
         setIsLinkValid(false);
+        toast({
+          title: "Fehler beim Laden des Bildes",
+          description: (
+            <div>
+              <p>{data.error}</p>
+              {data.failedSelectors?.length > 0 && (
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-sm">
+                    Fehlgeschlagene Selektoren ({data.failedSelectors.length})
+                  </summary>
+                  <ul className="mt-1 text-sm space-y-1">
+                    {data.failedSelectors.map((item: { selector: string; reason: string }, index: number) => (
+                      <li key={index} className="ml-4">
+                        <span className="font-mono text-xs">{item.selector}</span>
+                        <br />
+                        <span className="text-muted-foreground text-xs">→ {item.reason}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+            </div>
+          ),
+          variant: "destructive",
+        });
       }
     } catch (error) {
       console.error('Error fetching link preview:', error);
       setUploadStatus('error');
       setIsLinkValid(false);
+      toast({
+        title: "Fehler",
+        description: "Fehler beim Laden der Vorschau",
+        variant: "destructive",
+      });
     } finally {
       setIsLinkLoading(false);
     }
@@ -119,10 +176,16 @@ export default function AddProductModal({ isOpen, onClose, onAddProduct, isLoadi
     setLink('');
     setUploadStatus('idle');
     setIsLinkValid(false);
+    setIsLinkLoading(false);
+  };
+
+  const handleClose = () => {
+    resetForm();
+    onClose();
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Add New Product</DialogTitle>
