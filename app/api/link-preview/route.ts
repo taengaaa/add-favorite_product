@@ -43,6 +43,7 @@ function extractProductIdFromUrl(url: string): string | null {
   // Galaxus/Digitec URLs haben folgende Formate:
   // https://www.galaxus.ch/de/s1/product/123456
   // https://www.digitec.ch/de/s1/product/123456
+  //coool
   const match = url.match(/(?:galaxus|digitec)\.ch\/.*?\/product[\/|-](\d+)/);
   return match ? match[1] : null;
 }
