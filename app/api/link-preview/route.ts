@@ -65,7 +65,16 @@ export async function POST(request: Request) {
     const isMigros = isMigrosProductUrl(url);
 
     browser = await chromium.launch({
-      headless: true
+      headless: true,
+      args: [
+        '--disable-setuid-sandbox',
+        '--no-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--no-first-run',
+        '--no-zygote',
+        '--disable-gpu'
+      ]
     });
 
     const context = await browser.newContext({
