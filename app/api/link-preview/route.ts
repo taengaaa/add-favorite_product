@@ -282,6 +282,7 @@ export async function POST(request: Request) {
     const { imageUrl, usedSelector } = validResult as { imageUrl: string, usedSelector: string };
     
     // Ensure the image URL is absolute
+    //
     const absoluteImageUrl = imageUrl.startsWith('//') 
       ? `https:${imageUrl}`
       : imageUrl.startsWith('/') 
