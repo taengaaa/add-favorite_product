@@ -41,8 +41,11 @@ next-env.d.ts
 .env.production.local
 
 # cursor files
+.cursor/
 .cursorignore
 .cursorrules
+.cursor.json
+.cursor-test-coverage
 node_modules/
 /test-results/
 /playwright-report/
