@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -37,18 +37,7 @@ export default function ProductOverview() {
   const { toast } = useToast();
   const [userUpvotes, setUserUpvotes] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    fetchProducts();
-    fetchUserUpvotes();
-    // Generate or retrieve the user's unique identifier
-    let userId = localStorage.getItem('userId');
-    if (!userId) {
-      userId = uuidv4();
-      localStorage.setItem('userId', userId);
-    }
-  }, []);
-
-  const fetchProducts = async () => {
+  const fetchProducts = useCallback(async () => {
     setLoading(true);
     let query = supabase
       .from('products')
@@ -68,9 +57,9 @@ export default function ProductOverview() {
       setProducts(data || []);
     }
     setLoading(false);
-  };
+  }, [toast]);
 
-  const fetchUserUpvotes = async () => {
+  const fetchUserUpvotes = useCallback(async () => {
     const userId = localStorage.getItem('userId');
     if (!userId) return;
 
@@ -89,7 +78,25 @@ export default function ProductOverview() {
     } else {
       setUserUpvotes(new Set(data.map(item => item.product_id)));
     }
-  };
+  }, [toast]);
+
+  useEffect(() => {
+    // Generate or retrieve the user's unique identifier
+    let userId = localStorage.getItem('userId');
+    if (!userId) {
+      userId = uuidv4();
+      localStorage.setItem('userId', userId);
+    }
+  }, []);
+
+  useEffect(() => {
+    const loadInitialData = async () => {
+      await fetchProducts();
+      await fetchUserUpvotes();
+    };
+    
+    loadInitialData();
+  }, [fetchProducts, fetchUserUpvotes]);
 
   const addProduct = async (product: Omit<Product, 'id' | 'upvotes' | 'created_at'>) => {
     setIsAddingProduct(true);

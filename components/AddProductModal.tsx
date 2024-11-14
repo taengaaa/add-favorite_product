@@ -13,6 +13,7 @@ import { categories } from '@/src/utils/categories';
 import { supabase } from '@/lib/supabase';
 import { useToast } from "@/hooks/use-toast"
 import { PostgrestError } from '@supabase/supabase-js';
+import Image from 'next/image';
 
 type AddProductModalProps = {
   isOpen: boolean;
@@ -35,6 +36,83 @@ export default function AddProductModal({ isOpen, onClose, onAddProduct, isLoadi
 
   useEffect(() => {
     let timeoutId: NodeJS.Timeout;
+
+    const fetchLinkPreview = async (url: string) => {
+      try {
+        const response = await fetch('/api/link-preview', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url }),
+        });
+        const data = await response.json();
+        if (data.image) {
+          setImage(data.image);
+          setUploadStatus('success');
+          setIsLinkValid(true);
+          toast({
+            title: "Bild erfolgreich gefunden",
+            description: (
+              <div>
+                <p>Verwendeter Selektor: {data.usedSelector}</p>
+                {data.failedSelectors?.length > 0 && (
+                  <details className="mt-2">
+                    <summary className="cursor-pointer text-sm text-muted-foreground">
+                      Nicht funktionierende Selektoren ({data.failedSelectors.length})
+                    </summary>
+                    <ul className="mt-1 text-sm text-muted-foreground">
+                      {data.failedSelectors.map((selector: string, index: number) => (
+                        <li key={index} className="ml-4">• {selector}</li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+              </div>
+            ),
+            variant: "default",
+          });
+        } else {
+          setUploadStatus('error');
+          setIsLinkValid(false);
+          toast({
+            title: "Fehler beim Laden des Bildes",
+            description: (
+              <div>
+                <p>{data.error}</p>
+                {data.failedSelectors?.length > 0 && (
+                  <details className="mt-2">
+                    <summary className="cursor-pointer text-sm">
+                      Fehlgeschlagene Selektoren ({data.failedSelectors.length})
+                    </summary>
+                    <ul className="mt-1 text-sm space-y-1">
+                      {data.failedSelectors.map((item: { selector: string; reason: string }, index: number) => (
+                        <li key={index} className="ml-4">
+                          <span className="font-mono text-xs">{item.selector}</span>
+                          <br />
+                          <span className="text-muted-foreground text-xs">→ {item.reason}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+              </div>
+            ),
+            variant: "destructive",
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching link preview:', error);
+        setUploadStatus('error');
+        setIsLinkValid(false);
+        toast({
+          title: "Fehler",
+          description: "Fehler beim Laden der Vorschau",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLinkLoading(false);
+      }
+    };
+
     if (link) {
       setIsLinkLoading(true);
       timeoutId = setTimeout(() => {
@@ -42,89 +120,13 @@ export default function AddProductModal({ isOpen, onClose, onAddProduct, isLoadi
       }, 500);
     }
     return () => clearTimeout(timeoutId);
-  }, [link]);
+  }, [link, toast]);
 
   useEffect(() => {
     if (!isOpen) {
       resetForm();
     }
   }, [isOpen]);
-
-  const fetchLinkPreview = async (url: string) => {
-    try {
-      const response = await fetch('/api/link-preview', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url }),
-      });
-      const data = await response.json();
-      if (data.image) {
-        setImage(data.image);
-        setUploadStatus('success');
-        setIsLinkValid(true);
-        toast({
-          title: "Bild erfolgreich gefunden",
-          description: (
-            <div>
-              <p>Verwendeter Selektor: {data.usedSelector}</p>
-              {data.failedSelectors?.length > 0 && (
-                <details className="mt-2">
-                  <summary className="cursor-pointer text-sm text-muted-foreground">
-                    Nicht funktionierende Selektoren ({data.failedSelectors.length})
-                  </summary>
-                  <ul className="mt-1 text-sm text-muted-foreground">
-                    {data.failedSelectors.map((selector: string, index: number) => (
-                      <li key={index} className="ml-4">• {selector}</li>
-                    ))}
-                  </ul>
-                </details>
-              )}
-            </div>
-          ),
-          variant: "default",
-        });
-      } else {
-        setUploadStatus('error');
-        setIsLinkValid(false);
-        toast({
-          title: "Fehler beim Laden des Bildes",
-          description: (
-            <div>
-              <p>{data.error}</p>
-              {data.failedSelectors?.length > 0 && (
-                <details className="mt-2">
-                  <summary className="cursor-pointer text-sm">
-                    Fehlgeschlagene Selektoren ({data.failedSelectors.length})
-                  </summary>
-                  <ul className="mt-1 text-sm space-y-1">
-                    {data.failedSelectors.map((item: { selector: string; reason: string }, index: number) => (
-                      <li key={index} className="ml-4">
-                        <span className="font-mono text-xs">{item.selector}</span>
-                        <br />
-                        <span className="text-muted-foreground text-xs">→ {item.reason}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </details>
-              )}
-            </div>
-          ),
-          variant: "destructive",
-        });
-      }
-    } catch (error) {
-      console.error('Error fetching link preview:', error);
-      setUploadStatus('error');
-      setIsLinkValid(false);
-      toast({
-        title: "Fehler",
-        description: "Fehler beim Laden der Vorschau",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLinkLoading(false);
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -238,7 +240,13 @@ export default function AddProductModal({ isOpen, onClose, onAddProduct, isLoadi
             <div className="mt-4">
               <Label>Image Preview</Label>
               <div className="mt-2 relative w-full h-40 bg-gray-100 rounded-lg overflow-hidden">
-                <img src={image} alt="Preview" className="w-full h-full object-cover" />
+                <Image 
+                  src={image} 
+                  alt="Preview" 
+                  fill
+                  className="object-cover"
+                  sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                />
               </div>
             </div>
           )}

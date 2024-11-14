@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { ArrowLeft, ExternalLink, ThumbsUp, Edit, Eye } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -35,12 +35,7 @@ export default function ProductDetail({ product: initialProduct }: ProductDetail
   const router = useRouter();
   const { toast } = useToast()
 
-  useEffect(() => {
-    fetchProduct();
-    checkUserUpvote();
-  }, [initialProduct.id]);
-
-  const fetchProduct = async () => {
+  const fetchProduct = useCallback(async () => {
     const { data, error } = await supabase
       .from('products')
       .select('*')
@@ -56,9 +51,9 @@ export default function ProductDetail({ product: initialProduct }: ProductDetail
     } else if (data) {
       setProduct(data);
     }
-  };
+  }, [initialProduct.id, toast]);
 
-  const checkUserUpvote = async () => {
+  const checkUserUpvote = useCallback(async () => {
     const userId = localStorage.getItem('userId');
     if (!userId) {
       return;
@@ -76,7 +71,16 @@ export default function ProductDetail({ product: initialProduct }: ProductDetail
     } else {
       setHasUpvoted(!!data);
     }
-  };
+  }, [initialProduct.id]);
+
+  useEffect(() => {
+    const loadProductData = async () => {
+      await fetchProduct();
+      await checkUserUpvote();
+    };
+    
+    loadProductData();
+  }, [fetchProduct, checkUserUpvote]);
 
   const getCategoryEmoji = (categoryName: string) => {
     const category = categories.find(cat => cat.name === categoryName);
