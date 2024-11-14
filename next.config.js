@@ -4,6 +4,18 @@ const nextConfig = {
   experimental: {
     serverComponentsExternalPackages: ['playwright-core', '@playwright/test'],
   },
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '**',
+      },
+      {
+        protocol: 'http',
+        hostname: '**',
+      }
+    ],
+  },
 };
 
 module.exports = nextConfig;
