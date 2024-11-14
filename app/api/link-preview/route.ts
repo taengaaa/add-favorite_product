@@ -133,13 +133,13 @@ export async function POST(request: Request) {
         // Evaluiere die Seite direkt um das Produktbild zu finden
         const imageUrl = await page.evaluate(() => {
           // Suche zuerst nach dem Produktbild in der Universal-Komponente
-          const universalImg = document.querySelector('mo-product-image-universal img[src*="image.migros.ch"]');
+          const universalImg = document.querySelector('mo-product-image-universal img[src*="image.migros.ch"]') as HTMLImageElement;
           if (universalImg) {
             return universalImg.getAttribute('src');
           }
 
           // Suche nach allen Bildern mit Migros-Domain
-          const allImages = Array.from(document.querySelectorAll('img[src*="image.migros.ch"]'));
+          const allImages = Array.from(document.querySelectorAll('img[src*="image.migros.ch"]')) as HTMLImageElement[];
           const productImage = allImages.find(img => 
             img.src.includes('/mo-boxed/') && 
             !img.src.includes('logo') && 
