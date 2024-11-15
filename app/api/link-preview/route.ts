@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { chromium } from 'playwright';
+import puppeteer from 'puppeteer';
 
 // Common selectors for product images across various e-commerce platforms
 const IMAGE_SELECTORS = [
@@ -64,28 +64,58 @@ export async function POST(request: Request) {
 
     const isMigros = isMigrosProductUrl(url);
 
-    browser = await chromium.launch({
-      headless: true,
-      args: [
-        '--disable-setuid-sandbox',
-        '--no-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
-        '--disable-gpu'
-      ]
-    });
+    try {
+      browser = await puppeteer.launch({
+        args: [
+          '--disable-web-security',
+          '--disable-features=IsolateOrigins',
+          '--disable-site-isolation-trials',
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage'
+        ],
+        defaultViewport: {
+          width: 1280,
+          height: 800,
+          deviceScaleFactor: 1,
+        },
+        headless: "new",
+      });
+    } catch (error) {
+      console.error('Browser launch error:', error);
+      return NextResponse.json({ 
+        error: 'Fehler beim Starten des Browsers',
+        details: error instanceof Error ? error.message : 'Unbekannter Browser-Fehler',
+        type: 'browser_launch_error'
+      }, { status: 500 });
+    }
 
-    const context = await browser.newContext({
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-      viewport: { width: 1280, height: 800 },
-      deviceScaleFactor: 1,
-      hasTouch: false,
-      locale: 'de-CH',
-      geolocation: { longitude: 7.4474, latitude: 46.9480 }, // Schweizer Koordinaten
-      permissions: ['geolocation'],
-      extraHTTPHeaders: {
+    let page;
+    try {
+      page = await browser.newPage();
+      
+      // Timeout erhöhen und Error Handling verbessern
+      page.setDefaultTimeout(60000);
+      page.setDefaultNavigationTimeout(60000);
+
+      // Error Event Handler mit detailliertem Logging
+      page.on('error', err => {
+        console.error('Page error:', err);
+      });
+
+      page.on('pageerror', err => {
+        console.error('Page error:', err);
+      });
+
+      page.on('console', msg => {
+        console.log('Browser console:', msg.text());
+      });
+
+      // Set user agent and viewport
+      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36');
+      
+      // Set extra headers
+      await page.setExtraHTTPHeaders({
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
         'Accept-Language': 'de-CH,de;q=0.9,en-US;q=0.8,en;q=0.7',
         'Accept-Encoding': 'gzip, deflate, br',
@@ -98,47 +128,98 @@ export async function POST(request: Request) {
         'Sec-Fetch-Site': 'none',
         'Sec-Fetch-User': '?1',
         'Upgrade-Insecure-Requests': '1'
-      }
-    });
-
-    const page = await context.newPage();
-
-    // Erlaube alle Ressourcen für Migros
-    if (isMigros) {
-      await page.route('**/*', route => route.continue());
-    } else {
-      // Existing resource blocking for non-Migros sites
-      await page.route('**/*', async (route) => {
-        const request = route.request();
-        if (['document', 'script'].includes(request.resourceType())) {
-          route.continue();
-        } else {
-          route.abort();
-        }
       });
+
+    } catch (error) {
+      console.error('Page creation error:', error);
+      if (browser) await browser.close();
+      return NextResponse.json({ 
+        error: 'Fehler beim Erstellen der Browser-Seite',
+        details: error instanceof Error ? error.message : 'Unbekannter Seiten-Fehler',
+        type: 'page_creation_error'
+      }, { status: 500 });
     }
 
-    // Navigiere zur Seite
-    await page.goto(url, { 
-      waitUntil: 'networkidle',
-      timeout: 30000 // Erhöhtes Timeout für Migros
-    });
+    // Verbesserte Request Interception mit Logging
+    try {
+      await page.setRequestInterception(true);
+      page.on('request', request => {
+        try {
+          if (isMigros) {
+            request.continue();
+          } else {
+            const resourceType = request.resourceType();
+            if (['document', 'script', 'xhr', 'fetch'].includes(resourceType)) {
+              request.continue();
+            } else {
+              request.abort();
+            }
+          }
+        } catch (error) {
+          console.error('Request interception error:', error);
+          request.continue();
+        }
+      });
+    } catch (error) {
+      console.error('Request interception setup error:', error);
+      if (browser) await browser.close();
+      return NextResponse.json({ 
+        error: 'Fehler bei der Request-Interception',
+        details: error instanceof Error ? error.message : 'Unbekannter Interception-Fehler',
+        type: 'request_interception_error'
+      }, { status: 500 });
+    }
 
-    // Spezielle Behandlung für Migros
+    // Navigate to page with better error handling
+    try {
+      const response = await page.goto(url, { 
+        waitUntil: 'networkidle0',
+        timeout: 60000
+      });
+
+      if (!response) {
+        throw new Error('Keine Antwort von der Seite erhalten');
+      }
+
+      const status = response.status();
+      if (status >= 400) {
+        throw new Error(`Seite antwortet mit Status ${status} (${response.statusText()})`);
+      }
+
+      // Prüfe ob die Seite überhaupt geladen wurde
+      const content = await page.content();
+      if (!content || content.length < 100) {
+        throw new Error('Seite konnte nicht vollständig geladen werden');
+      }
+
+    } catch (error) {
+      console.error('Navigation error:', error);
+      if (browser) await browser.close();
+      return NextResponse.json({ 
+        error: 'Fehler beim Laden der Seite',
+        details: error instanceof Error ? error.message : 'Unbekannter Fehler',
+        type: 'navigation_error'
+      }, { status: 500 });
+    }
+
+    // Define image selectors based on site type
+    const migrosSelectors = [
+      'mo-product-image-universal img[src*="image.migros.ch"]',
+      'img[src*="image.migros.ch"][src*="/mo-boxed/"]',
+      'img[src*="image.migros.ch"]:not([src*="logo"]):not([src*="icon"])'
+    ];
+
+    const filteredImageSelectors = isMigros ? migrosSelectors : IMAGE_SELECTORS;
+
+    // Special handling for Migros
     if (isMigros) {
       try {
-        // Warte auf die vollständige Initialisierung der Seite
-        await page.waitForLoadState('networkidle');
-        
-        // Evaluiere die Seite direkt um das Produktbild zu finden
         const imageUrl = await page.evaluate(() => {
-          // Suche zuerst nach dem Produktbild in der Universal-Komponente
           const universalImg = document.querySelector('mo-product-image-universal img[src*="image.migros.ch"]') as HTMLImageElement;
           if (universalImg) {
             return universalImg.getAttribute('src');
           }
 
-          // Suche nach allen Bildern mit Migros-Domain
           const allImages = Array.from(document.querySelectorAll('img[src*="image.migros.ch"]')) as HTMLImageElement[];
           const productImage = allImages.find(img => 
             img.src.includes('/mo-boxed/') && 
@@ -146,11 +227,7 @@ export async function POST(request: Request) {
             !img.src.includes('icon')
           );
           
-          if (productImage) {
-            return productImage.src;
-          }
-
-          return null;
+          return productImage ? productImage.src : null;
         });
 
         if (imageUrl) {
@@ -165,63 +242,6 @@ export async function POST(request: Request) {
       }
     }
 
-    // Fallback auf normale Selektoren wenn die direkte Evaluation fehlschlägt
-    const filteredImageSelectors = isMigros 
-      ? [
-          'mo-product-image-universal img[src*="image.migros.ch"]',
-          'img[src*="image.migros.ch"][src*="/mo-boxed/"]',
-          'img[src*="image.migros.ch"]:not([src*="logo"]):not([src*="icon"])'
-        ]
-      : IMAGE_SELECTORS;
-
-    // Angepasste Selektorprüfung für Migros
-    const checkSelector = async (selector: string) => {
-      try {
-        if (selector.startsWith('meta')) {
-          const metaContent = await page.getAttribute(selector, 'content');
-          if (metaContent) {
-            return { 
-              imageUrl: metaContent, 
-              usedSelector: selector 
-            };
-          }
-          return { selector, reason: 'Meta tag content not found' };
-        } else {
-          const img = await page.locator(selector).first();
-          
-          // Prüfe zuerst die Existenz
-          const exists = await img.count() > 0;
-          if (!exists) {
-            return { selector, reason: 'Element not found' };
-          }
-
-          // Hole das src Attribut
-          const src = await img.getAttribute('src');
-          if (src && src.includes('image.migros.ch')) {
-            // Für Migros-Bilder prüfen wir nur das src Attribut
-            return { 
-              imageUrl: src, 
-              usedSelector: selector 
-            };
-          }
-
-          // Für andere Seiten prüfen wir weitere Attribute
-          for (const attr of ['src', 'data-src', 'data-zoom-image', 'data-magnify-src']) {
-            const attrValue = await img.getAttribute(attr);
-            if (attrValue && !attrValue.includes('data:image')) {
-              return { 
-                imageUrl: attrValue, 
-                usedSelector: `${selector}[${attr}]` 
-              };
-            }
-          }
-          return { selector, reason: 'No valid image source found' };
-        }
-      } catch (error) {
-        return { selector, reason: error instanceof Error ? error.message : 'Unknown error' };
-      }
-    };
-
     // Optimierung 4: Priorisierte Selektoren
     const prioritySelectors = isMigros 
       ? filteredImageSelectors // Für Migros verwenden wir nur die Migros-spezifischen Selektoren
@@ -235,72 +255,211 @@ export async function POST(request: Request) {
     const remainingSelectors = isMigros 
       ? [] // Keine weiteren Selektoren für Migros
       : filteredImageSelectors.filter(
-          selector => !prioritySelectors.includes(selector)
+          (selector: string) => !prioritySelectors.includes(selector)
         );
 
-    const failedSelectors = [];
+    const failedSelectors: Array<{ selector: string; reason: string }> = [];
     
+    // Modified checkSelector function for Puppeteer with better error handling
+    const checkSelector = async (selector: string) => {
+      try {
+        if (selector.startsWith('meta')) {
+          try {
+            const metaContent = await page.$eval(selector, (el: Element) => el.getAttribute('content'));
+            if (metaContent) {
+              return { 
+                imageUrl: metaContent, 
+                usedSelector: selector 
+              };
+            }
+            return { selector, reason: 'Meta tag content not found' };
+          } catch (error) {
+            return { selector, reason: `Meta tag error: ${error instanceof Error ? error.message : 'Unknown error'}` };
+          }
+        } else {
+          try {
+            const element = await page.$(selector);
+            if (!element) {
+              return { selector, reason: 'Element not found' };
+            }
+
+            // Prüfe zuerst das src Attribut
+            try {
+              const src = await element.evaluate((el: Element) => el.getAttribute('src'));
+              if (src && !src.includes('data:image')) {
+                return { 
+                  imageUrl: src, 
+                  usedSelector: selector 
+                };
+              }
+            } catch (error) {
+              console.log(`Error getting src for selector ${selector}:`, error);
+            }
+
+            // Prüfe weitere Attribute
+            for (const attr of ['data-src', 'data-zoom-image', 'data-magnify-src']) {
+              try {
+                const attrValue = await element.evaluate((el: Element, attr) => el.getAttribute(attr), attr);
+                if (attrValue && !attrValue.includes('data:image')) {
+                  return { 
+                    imageUrl: attrValue, 
+                    usedSelector: `${selector}[${attr}]` 
+                  };
+                }
+              } catch (error) {
+                console.log(`Error getting ${attr} for selector ${selector}:`, error);
+              }
+            }
+
+            // Versuche es mit innerHTML als Fallback
+            try {
+              const innerHTML = await element.evaluate((el: Element) => el.innerHTML);
+              const srcMatch = innerHTML.match(/src=["'](https?:\/\/[^"']+)["']/);
+              if (srcMatch && srcMatch[1]) {
+                return {
+                  imageUrl: srcMatch[1],
+                  usedSelector: `${selector} (innerHTML)`
+                };
+              }
+            } catch (error) {
+              console.log(`Error getting innerHTML for selector ${selector}:`, error);
+            }
+
+            return { selector, reason: 'No valid image source found in any attribute' };
+          } catch (error) {
+            return { selector, reason: `Selector evaluation error: ${error instanceof Error ? error.message : 'Unknown error'}` };
+          }
+        }
+      } catch (error) {
+        console.error(`Fatal error in checkSelector for ${selector}:`, error);
+        return { selector, reason: `Fatal error: ${error instanceof Error ? error.message : 'Unknown error'}` };
+      }
+    };
+
     // Prüfe priorisierte Selektoren zuerst
     for (const selector of prioritySelectors) {
-      const result = await checkSelector(selector);
-      if ('imageUrl' in result && result.imageUrl) {
-        await browser.close();
-        const { imageUrl, usedSelector } = result;
-        
-        // Ensure the image URL is absolute
-        const absoluteImageUrl = imageUrl.startsWith('//') 
-          ? `https:${imageUrl}`
-          : imageUrl.startsWith('/') 
-            ? `${new URL(url).origin}${imageUrl}`
-            : imageUrl;
+      try {
+        console.log(`Checking priority selector: ${selector}`);
+        const result = await checkSelector(selector);
+        if ('imageUrl' in result && result.imageUrl) {
+          console.log(`Found image with selector: ${selector}`);
+          await browser.close();
+          const { imageUrl, usedSelector } = result;
+          
+          // Ensure the image URL is absolute and valid
+          try {
+            const absoluteImageUrl = imageUrl.startsWith('//') 
+              ? `https:${imageUrl}`
+              : imageUrl.startsWith('/') 
+                ? new URL(imageUrl, url).toString()
+                : imageUrl;
 
-        return NextResponse.json({ 
-          image: absoluteImageUrl,
-          usedSelector 
+            // Validate the URL
+            new URL(absoluteImageUrl);
+
+            return NextResponse.json({ 
+              image: absoluteImageUrl,
+              usedSelector 
+            });
+          } catch (error) {
+            console.error('URL processing error:', error);
+            failedSelectors.push({ 
+              selector, 
+              reason: `Invalid image URL: ${error instanceof Error ? error.message : 'Unknown error'}` 
+            });
+          }
+        } else {
+          failedSelectors.push(result as { selector: string; reason: string });
+        }
+      } catch (error) {
+        console.error(`Error processing selector ${selector}:`, error);
+        failedSelectors.push({ 
+          selector, 
+          reason: `Processing error: ${error instanceof Error ? error.message : 'Unknown error'}` 
         });
       }
-      failedSelectors.push(result);
     }
 
-    // Prüfe restliche Selektoren parallel
+    // Prüfe restliche Selektoren parallel mit verbessertem Error Handling
     const results = await Promise.all(
-      remainingSelectors.map(selector => checkSelector(selector))
+      remainingSelectors.map(async (selector: string) => {
+        try {
+          return await checkSelector(selector);
+        } catch (error) {
+          console.error(`Error in parallel selector check for ${selector}:`, error);
+          return { 
+            selector, 
+            reason: `Parallel processing error: ${error instanceof Error ? error.message : 'Unknown error'}` 
+          };
+        }
+      })
     );
 
-    const validResult = results.find(result => 'imageUrl' in result);
-    failedSelectors.push(...results.filter(result => !('imageUrl' in result)));
+    // Verbesserte Typisierung und Filterung der Ergebnisse
+    type SelectorResult = 
+      | { imageUrl: string; usedSelector: string }
+      | { selector: string; reason: string };
+
+    const validResults = results.filter((result): result is { imageUrl: string; usedSelector: string } => 
+      'imageUrl' in result && typeof result.imageUrl === 'string'
+    );
+
+    const invalidResults = results.filter((result): result is { selector: string; reason: string } => 
+      'selector' in result && 'reason' in result
+    );
+
+    failedSelectors.push(...invalidResults);
+
+    const validResult = validResults[0];
 
     await browser.close();
 
     if (!validResult) {
       return NextResponse.json({ 
         error: 'Kein passendes Bild gefunden',
-        failedSelectors
+        failedSelectors,
+        details: 'Alle Selektoren wurden geprüft, aber kein gültiges Bild gefunden'
       }, { status: 404 });
     }
 
-    const { imageUrl, usedSelector } = validResult as { imageUrl: string, usedSelector: string };
-    
-    // Ensure the image URL is absolute
-    //
-    const absoluteImageUrl = imageUrl.startsWith('//') 
-      ? `https:${imageUrl}`
-      : imageUrl.startsWith('/') 
-        ? `${new URL(url).origin}${imageUrl}`
-        : imageUrl;
+    try {
+      const { imageUrl, usedSelector } = validResult;
+      const absoluteImageUrl = imageUrl.startsWith('//') 
+        ? `https:${imageUrl}`
+        : imageUrl.startsWith('/') 
+          ? new URL(imageUrl, url).toString()
+          : imageUrl;
 
-    return NextResponse.json({ 
-      image: absoluteImageUrl,
-      usedSelector 
-    });
+      // Validate final URL
+      new URL(absoluteImageUrl);
+
+      return NextResponse.json({ 
+        image: absoluteImageUrl,
+        usedSelector 
+      });
+    } catch (error) {
+      console.error('Final URL processing error:', error);
+      return NextResponse.json({ 
+        error: 'Ungültige Bild-URL',
+        details: error instanceof Error ? error.message : 'Unknown error',
+        type: 'url_processing_error'
+      }, { status: 500 });
+    }
 
   } catch (error) {
+    console.error('Global error:', error);
     if (browser) {
-      await browser.close();
+      try {
+        await browser.close();
+      } catch (closeError) {
+        console.error('Error closing browser:', closeError);
+      }
     }
     return NextResponse.json({ 
-      error: 'Failed to process URL',
-      details: error instanceof Error ? error.message : 'Unknown error'
+      error: 'Fehler bei der Verarbeitung',
+      details: error instanceof Error ? error.message : 'Unbekannter Fehler',
+      type: 'processing_error',
+      stack: error instanceof Error ? error.stack : undefined
     }, { status: 500 });
   }
 }

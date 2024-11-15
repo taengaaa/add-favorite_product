@@ -39,12 +39,81 @@ export default function AddProductModal({ isOpen, onClose, onAddProduct, isLoadi
 
     const fetchLinkPreview = async (url: string) => {
       try {
+        let processedUrl = url;
+        if (!url.startsWith('http://') && !url.startsWith('https://')) {
+          processedUrl = `https://${url}`;
+        }
+
+        setIsLinkLoading(true);
         const response = await fetch('/api/link-preview', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url }),
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ url: processedUrl }),
         });
+
         const data = await response.json();
+
+        if (!response.ok) {
+          setUploadStatus('error');
+          setIsLinkValid(false);
+          
+          toast({
+            title: "Fehler beim Laden des Bildes",
+            description: (
+              <div className="space-y-2">
+                <p className="font-medium text-destructive">
+                  {data.error}
+                  {data.details && (
+                    <span className="block text-sm font-normal mt-1">
+                      {data.details}
+                    </span>
+                  )}
+                </p>
+                
+                {data.type && (
+                  <p className="text-sm text-muted-foreground">
+                    Fehlertyp: {data.type === 'navigation_error' ? 'Navigationsfehler' : 'Verarbeitungsfehler'}
+                  </p>
+                )}
+
+                {data.failedSelectors?.length > 0 && (
+                  <details className="mt-2">
+                    <summary className="cursor-pointer text-sm font-medium">
+                      Fehlgeschlagene Selektoren ({data.failedSelectors.length})
+                    </summary>
+                    <ul className="mt-2 space-y-1.5 text-sm">
+                      {data.failedSelectors.map((item: { selector: string; reason: string }, index: number) => (
+                        <li key={index} className="pl-4 border-l-2 border-muted">
+                          <code className="text-xs font-mono bg-muted px-1 py-0.5 rounded">
+                            {item.selector}
+                          </code>
+                          <p className="text-muted-foreground text-xs mt-0.5">
+                            → {item.reason}
+                          </p>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+
+                <p className="text-sm text-muted-foreground mt-4">
+                  Tipps:
+                  <ul className="list-disc pl-4 mt-1 space-y-1">
+                    <li>Überprüfen Sie, ob die URL korrekt ist</li>
+                    <li>Stellen Sie sicher, dass die Seite öffentlich zugänglich ist</li>
+                    <li>Versuchen Sie es in einigen Minuten erneut</li>
+                  </ul>
+                </p>
+              </div>
+            ),
+            variant: "destructive",
+            duration: 10000,
+          });
+          return;
+        }
+
         if (data.image) {
           setImage(data.image);
           setUploadStatus('success');
@@ -100,12 +169,18 @@ export default function AddProductModal({ isOpen, onClose, onAddProduct, isLoadi
           });
         }
       } catch (error) {
-        console.error('Error fetching link preview:', error);
         setUploadStatus('error');
         setIsLinkValid(false);
         toast({
-          title: "Fehler",
-          description: "Fehler beim Laden der Vorschau",
+          title: "Unerwarteter Fehler",
+          description: (
+            <div>
+              <p>Ein unerwarteter Fehler ist aufgetreten:</p>
+              <p className="text-sm text-destructive mt-1">
+                {error instanceof Error ? error.message : 'Unbekannter Fehler'}
+              </p>
+            </div>
+          ),
           variant: "destructive",
         });
       } finally {
